@@ -3289,7 +3289,6 @@ process get_software_versions {
     plasmidID -v > v_plasmidid.txt  || true
     Bandage --version > v_bandage.txt
     minimap2 --version > v_minimap2.txt
-    vg version > v_vg.txt
     echo \$(R --version 2>&1) > v_R.txt
     multiqc --version > v_multiqc.txt
     scrape_software_versions.py &> software_versions_mqc.yaml
