@@ -2234,7 +2234,7 @@ process SPADES_PLASMIDID {
 
     script:
     """
-    plasmidID -d $fasta -s $sample -c $scaffold --only-reconstruct -C 47 -S 47 -i 60 --no-trim -o .
+    plasmidID -d $fasta -s $sample -c $scaffold --only-reconstruct --kmer-identity 0.0 -C 47 -S 47 -i 60 --no-trim -o .
     mv NO_GROUP/$sample ./$sample
     """
 }
@@ -2520,7 +2520,7 @@ process METASPADES_PLASMIDID {
 
     script:
     """
-    plasmidID -d $fasta -s $sample -c $scaffold --only-reconstruct -C 47 -S 47 -i 60 --no-trim -o .
+    plasmidID -d $fasta -s $sample -c $scaffold --only-reconstruct --kmer-identity 0.0 -C 47 -S 47 -i 60 --no-trim -o .
     mv NO_GROUP/$sample ./$sample
     """
 }
@@ -2804,7 +2804,7 @@ process UNICYCLER_PLASMIDID {
 
     script:
     """
-    plasmidID -d $fasta -s $sample -c $scaffold --only-reconstruct -C 47 -S 47 -i 60 --no-trim -o .
+    plasmidID -d $fasta -s $sample -c $scaffold --only-reconstruct --kmer-identity 0.0 -C 47 -S 47 -i 60 --no-trim -o .
     mv NO_GROUP/$sample ./$sample
     """
 }
@@ -3077,7 +3077,7 @@ process MINIA_PLASMIDID {
 
     script:
     """
-    plasmidID -d $fasta -s $sample -c $scaffold --only-reconstruct -C 47 -S 47 -i 60 --no-trim -o .
+    plasmidID -d $fasta -s $sample -c $scaffold --only-reconstruct --kmer-identity 0.0 -C 47 -S 47 -i 60 --no-trim -o .
     mv NO_GROUP/$sample ./$sample
     """
 }
