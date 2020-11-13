@@ -1288,6 +1288,7 @@ process SAMTOOLS_MPILEUP {
     samtools mpileup \\
         --count-orphans \\
         --no-BAQ \\
+        --ignore-overlaps \\
         --max-depth $params.mpileup_depth \\
         --fasta-ref $fasta \\
         --min-BQ $params.min_base_qual \\
