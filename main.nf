@@ -1385,18 +1385,23 @@ process VARSCAN2_CONSENSUS {
     script:
     prefix = "${sample}.AF${params.max_allele_freq}"
     """
-    cat $fasta | sed -r '/^[[:space:]]*\$/d' | bcftools consensus ${vcf[0]} > ${prefix}.consensus.fa
-
     bedtools genomecov \\
         -bga \\
         -ibam ${bam[0]} \\
         -g $fasta \\
-        | awk '\$4 < $params.min_coverage' | bedtools merge > ${prefix}.mask.bed
+        | awk '\$4 < $params.min_coverage' > ${prefix}.lowcov.bed
+
+    parse_mask_bed.py ${vcf[0]} ${prefix}.lowcov.bed ${prefix}.lowcov.fix.bed
+
+    bedtools merge -i ${prefix}.lowcov.fix.bed > ${prefix}.mask.bed
 
     bedtools maskfasta \\
-        -fi ${prefix}.consensus.fa \\
+        -fi $fasta \\
         -bed ${prefix}.mask.bed \\
-        -fo ${prefix}.consensus.masked.fa
+        -fo ${index_base}.ref.masked.fa
+
+    cat ${index_base}.ref.masked.fa | bcftools consensus ${vcf[0]} > ${prefix}.consensus.masked.fa
+
     header=\$(head -n 1 ${prefix}.consensus.masked.fa | sed 's/>//g')
     sed -i "s/\${header}/${sample}/g" ${prefix}.consensus.masked.fa
 
