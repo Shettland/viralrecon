@@ -1126,6 +1126,7 @@ process PICARD_METRICS {
     } else {
         avail_mem = task.memory.toGiga()
     }
+    count_paired = single_end ? "COUNT_UNPAIRED=true" : ""
     suffix = params.skip_markduplicates ? "" : ".mkD"
     prefix = params.protocol == 'amplicon' ? "${sample}.trim${suffix}" : "${sample}${suffix}"
     """
@@ -1137,10 +1138,11 @@ process PICARD_METRICS {
         TMP_DIR=tmp
 
     picard -Xmx${avail_mem}g CollectWgsMetrics \\
-        COVERAGE_CAP=1000000 \\
+        COVERAGE_CAP=10000 \\
         INPUT=${bam[0]} \\
         OUTPUT=${prefix}.CollectWgsMetrics.coverage_metrics \\
         REFERENCE_SEQUENCE=$fasta \\
+        $count_paired \\
         VALIDATION_STRINGENCY=LENIENT \\
         TMP_DIR=tmp
     """
@@ -1279,13 +1281,15 @@ process SAMTOOLS_MPILEUP {
     tuple val(sample), val(single_end), path("*.mpileup") into ch_mpileup_varscan2,
                                                                ch_mpileup_ivar_variants,
                                                                ch_mpileup_ivar_consensus,
-                                                               ch_mpileup_ivar_bcftools
+                                                               ch_mpileup_ivar_bcftools,
+                                                               ch_mpileup_varscan2_consensus
 
     script:
     suffix = params.skip_markduplicates ? "" : ".mkD"
     prefix = params.protocol == 'amplicon' ? "${sample}.trim${suffix}" : "${sample}${suffix}"
     """
     samtools mpileup \\
+        -a \\
         --count-orphans \\
         --no-BAQ \\
         --ignore-overlaps \\
@@ -1375,7 +1379,7 @@ process VARSCAN2_CONSENSUS {
     !params.skip_variants && 'varscan2' in callers
 
     input:
-    tuple val(sample), val(single_end), path(bam), path(vcf) from ch_markdup_bam_varscan2_consensus.join(ch_varscan2_highfreq_consensus, by: [0,1])
+    tuple val(sample), val(single_end), path(mpileup), path(vcf) from ch_mpileup_varscan2_consensus.join(ch_varscan2_highfreq_consensus, by: [0,1])
     path fasta from ch_fasta
 
     output:
@@ -1385,15 +1389,7 @@ process VARSCAN2_CONSENSUS {
     script:
     prefix = "${sample}.AF${params.max_allele_freq}"
     """
-    bedtools genomecov \\
-        -bga \\
-        -ibam ${bam[0]} \\
-        -g $fasta \\
-        | awk '\$4 < $params.min_coverage' > ${prefix}.lowcov.bed
-
-    parse_mask_bed.py ${vcf[0]} ${prefix}.lowcov.bed ${prefix}.lowcov.fix.bed
-
-    bedtools merge -i ${prefix}.lowcov.fix.bed > ${prefix}.mask.bed
+    awk -v OFS='\\t' '{print \$1, \$2-1, \$2, \$4}' ${mpileup[0]} | awk '\$4 < 10' | bedtools merge > ${prefix}.mask.bed
 
     bedtools maskfasta \\
         -fi $fasta \\
@@ -1792,11 +1788,9 @@ process BCFTOOLS_CONSENSUS {
         -bga \\
         -ibam ${bam[0]} \\
         -g $fasta \\
-        | awk '\$4 < $params.min_coverage' > ${sample}.lowcov.bed
+        | awk '\$4 < $params.min_coverage' | bedtools merge > ${sample}.merged.bed
 
-    parse_mask_bed.py ${vcf[0]} ${sample}.lowcov.bed ${sample}.lowcov.fix.bed
-
-    bedtools merge -i ${sample}.lowcov.fix.bed > ${sample}.mask.bed
+    parse_mask_bed.py ${vcf[0]} ${sample}.merged.bed ${sample}.mask.bed
 
     bedtools maskfasta \\
         -fi $fasta \\
