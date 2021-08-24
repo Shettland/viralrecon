@@ -88,7 +88,8 @@ def parse_mask_bed(BedIn,BedOut,indels_pos_len):
                 else:
                     oline=ref_genome+'\t'+init_pos+'\t'+end_pos
             if test:
-                fout.write(oline)
+                fout.write(oline+'\n')
+
 ########More def functions
 def main(args=None):
     args = parse_args(args)
