@@ -1389,7 +1389,11 @@ process VARSCAN2_CONSENSUS {
     script:
     prefix = "${sample}.AF${params.max_allele_freq}"
     """
-    awk -v OFS='\\t' '{print \$1, \$2-1, \$2, \$4}' ${mpileup[0]} | awk '\$4 < 10' | bedtools merge > ${prefix}.mask.bed
+    awk -v OFS='\\t' '{print \$1, \$2-1, \$2, \$4}' ${mpileup[0]} | awk '\$4 < $params.min_coverage' > ${prefix}.lowcov.bed
+
+    parse_mask_bed.py ${vcf[0]} ${prefix}.lowcov.bed ${prefix}.lowcov.fix.bed
+
+    bedtools merge -i ${prefix}.lowcov.fix.bed > ${prefix}.mask.bed
 
     bedtools maskfasta \\
         -fi $fasta \\
