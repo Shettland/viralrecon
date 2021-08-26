@@ -1279,6 +1279,7 @@ process SAMTOOLS_MPILEUP {
 
     output:
     tuple val(sample), val(single_end), path("*.mpileup") into ch_mpileup_varscan2,
+                                                               ch_mpileup_bcftools_consensus,
                                                                ch_mpileup_ivar_variants,
                                                                ch_mpileup_ivar_consensus,
                                                                ch_mpileup_ivar_bcftools,
@@ -1779,7 +1780,7 @@ process BCFTOOLS_CONSENSUS {
     !params.skip_variants && 'bcftools' in callers
 
     input:
-    tuple val(sample), val(single_end), path(bam), path(vcf) from ch_markdup_bam_bcftools_consensus.join(ch_bcftools_variants_consensus, by: [0,1])
+    tuple val(sample), val(single_end), path(mpileup), path(vcf) from ch_mpileup_bcftools_consensus.join(ch_bcftools_variants_consensus, by: [0,1])
     path fasta from ch_fasta
 
     output:
@@ -1788,13 +1789,12 @@ process BCFTOOLS_CONSENSUS {
 
     script:
     """
-    bedtools genomecov \\
-        -bga \\
-        -ibam ${bam[0]} \\
-        -g $fasta \\
-        | awk '\$4 < $params.min_coverage' | bedtools merge > ${sample}.merged.bed
 
-    parse_mask_bed.py ${vcf[0]} ${sample}.merged.bed ${sample}.mask.bed
+    awk -v OFS='\\t' '{print \$1, \$2-1, \$2, \$4}' ${mpileup[0]} | awk '\$4 < $params.min_coverage' > ${sample}.lowcov.bed
+
+    parse_mask_bed.py ${vcf[0]} ${sample}.lowcov.bed ${sample}.lowcov.fix.bed
+
+    bedtools merge -i ${sample}.lowcov.fix.bed > ${sample}.mask.bed
 
     bedtools maskfasta \\
         -fi $fasta \\
