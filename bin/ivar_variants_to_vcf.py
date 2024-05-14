@@ -12,7 +12,7 @@ from collections import deque
 import numpy as np
 from Bio import SeqIO
 from scipy.stats import fisher_exact
-
+import polars as pl
 
 def parse_args(args=None):
     Description = "Convert iVar variants TSV file to VCF format."
@@ -188,7 +188,6 @@ def strand_bias_filter(format):
     else:
         return False
 
-
 def write_vcf_header(ref, ignore_strand_bias, file_out, filename):
     """
     Description:
@@ -324,6 +323,7 @@ def get_diff_position(seq1, seq2):
     ind_diff = [i for i in range(len(seq1)) if seq1[i] != seq2[i]]
     if len(ind_diff) > 1:
         print("There has been an issue, more than one difference between the seqs.")
+        import pdb; pdb.set_trace()
         return False
     else:
         return ind_diff[0]
@@ -397,6 +397,58 @@ def process_variants(variants, num_collapse):
 
     return chrom, pos, id, ref, alt, qual, filter, info, format
 
+def merge_codons(line_vars, variants, q_pos):
+    (
+        chrom,
+        pos,
+        id,
+        ref,
+        alt,
+        qual,
+        info,
+        format,
+        ref_codon,
+        alt_codon,
+        pass_test,
+        var_type,
+    ) = line_vars
+    ## re-fill queue and dict accordingly
+    q_pos.append((pos, var_type))  # adding type information
+    variants[(chrom, pos, ref, alt)] = {
+        "chrom": chrom,
+        "pos": pos,
+        "id": id,
+        "ref": ref,
+        "alt": alt,
+        "qual": qual,
+        "filter": filter,
+        "info": info,
+        "format": format,
+        "ref_codon": ref_codon,
+        "alt_codon": alt_codon,
+        }
+    if len(q_pos) == q_pos.maxlen:
+        fe_codon_ref = variants[next(iter(variants))]["ref_codon"]
+        fe_codon_alt = variants[next(iter(variants))]["alt_codon"]
+        num_collapse = check_merge_codons(q_pos, fe_codon_ref, fe_codon_alt)
+        (
+            chrom,
+            pos,
+            id,
+            ref,
+            alt,
+            qual,
+            filter,
+            info,
+            format,
+        ) = process_variants(variants, num_collapse)
+        ## Empty variants dict and queue accordingly
+        for _ in range(num_collapse):
+            variants.popitem(last=False)
+            q_pos.popleft()
+    else:
+        return False
+    return chrom, pos, id, ref, alt, qual, filter, info, format, variants, q_pos
 
 def main(args=None):
     # Process args
@@ -446,11 +498,6 @@ def main(args=None):
                     var_type,
                 ) = parse_ivar_line(line)
 
-                ## If pos is duplicated due to annotation skip lines
-                if pos == last_pos:
-                    continue
-
-                last_pos = pos
                 #####################
                 ## Process filters ##
                 #####################
@@ -475,58 +522,38 @@ def main(args=None):
                 if args.pass_only and filter != "PASS":
                     write_line = False
                 ### AF filtering. ALT_DP/(ALT_DP+REF_DP)
-                if float(format[3] / (format[0] + format[3])) < args.allele_freq_threshold:
+                if float(format[6]) < args.allele_freq_threshold:
                     write_line = False
                 ### Duplication filter
                 if (chrom, pos, ref, alt) in var_list:
                     write_line = False
                 else:
                     var_list.append((chrom, pos, ref, alt))
-
+                last_variants = variants
+                last_qpos = q_pos
                 ############################################################
                 ##                MERGE_CODONS                            ##
                 ## Merge consecutive variants belonging to the same codon ##
                 ############################################################
                 if not args.ignore_merge_codons and var_type == "SNP":
-                    ## re-fill queue and dict accordingly
-                    q_pos.append((pos, var_type))  # adding type information
-                    variants[(chrom, pos, ref, alt)] = {
-                        "chrom": chrom,
-                        "pos": pos,
-                        "id": id,
-                        "ref": ref,
-                        "alt": alt,
-                        "qual": qual,
-                        "filter": filter,
-                        "info": info,
-                        "format": format,
-                        "ref_codon": ref_codon,
-                        "alt_codon": alt_codon,
-                    }
-
-                    if len(q_pos) == q_pos.maxlen:
-                        fe_codon_ref = variants[next(iter(variants))]["ref_codon"]
-                        fe_codon_alt = variants[next(iter(variants))]["alt_codon"]
-                        num_collapse = check_merge_codons(q_pos, fe_codon_ref, fe_codon_alt)
-                        (
-                            chrom,
-                            pos,
-                            id,
-                            ref,
-                            alt,
-                            qual,
-                            filter,
-                            info,
-                            format,
-                        ) = process_variants(variants, num_collapse)
-
-                        ## Empty variants dict and queue accordingly
-                        for _ in range(num_collapse):
-                            variants.popitem(last=False)
-                            q_pos.popleft()
+                    ### Merge codons for each duplicated variant
+                    if pos == last_pos:
+                        if merge_codons == False:
+                            write_line = False
+                        else:
+                            (
+                                chrom,
+                                pos,
+                                id,
+                                ref,
+                                alt,
+                                filter,
+                                qual,
+                                info,
+                                format
+                            ) = merge_codons()
                     else:
-                        write_line = False
-
+                        merge_codons(line, variants, q_pos)
                 ##############################
                 ## Write output to vcf file ##
                 ##############################
