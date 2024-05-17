@@ -7,7 +7,6 @@ import re
 import errno
 import argparse
 import warnings
-import statistics
 from itertools import product
 
 import numpy as np
@@ -205,8 +204,8 @@ class IvarVariants:
         vcf_dict["FILTER"] = ivar_df.apply(self.apply_filters, axis=1)
         vcf_dict["INFO"] = np.select(
             [ivar_df["ALT"].str[0] == "+", ivar_df["ALT"].str[0] == "-"],
-            ["INS", "DEL"],
-            default="SNP",
+            ["TYPE=INS", "TYPE=DEL"],
+            default="TYPE=SNP",
         )
         format_cols = [
             "GT",
@@ -418,7 +417,7 @@ class IvarVariants:
         Returns:
             processed_vcf_df: dataframe with consecutive variants merged
         """
-        clean_vcf_df = vcf_df[vcf_df["INFO"] == "SNP"]
+        clean_vcf_df = vcf_df[vcf_df["INFO"] == "TYPE=SNP"]
         clean_vcf_df = clean_vcf_df[clean_vcf_df["FILTER"] == "PASS"].dropna()
         consecutive_df = self.find_consecutive(clean_vcf_df)
         if consecutive_df.empty:
@@ -469,9 +468,7 @@ class IvarVariants:
             header_source += header_contig
 
         header_info = [
-            '##INFO=<ID=SNP,Number=1,Type=String,Description="Single Nucleotide Polimorfism">',
-            '##INFO=<ID=DEL,Number=1,Type=String,Description="Deletion">',
-            '##INFO=<ID=INS,Number=1,Type=String,Description="Insertion">',
+            '##INFO=<ID=TYPE,Number=1,Type=String,Description="Either SNP (Single Nucleotide Polymorphism), DEL (deletion) or INS (Insertion)">',
         ]
         header_filter = [
             '##FILTER=<ID=PASS,Description="All filters passed">',
